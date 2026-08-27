@@ -326,8 +326,8 @@ def build_rewriter_prompt(seed_prompt: str, answers: list[Answer]) -> str:
 async def stream_rewrite(
     model: Model, seed_prompt: str, answers: list[Answer], custom_instructions: str = ""
 ) -> AsyncIterator[str]:
-    """Yield the accumulated rewritten prompt as it streams in."""
+    """Yield fragments of the rewritten prompt as they stream in."""
     rewriter = make_rewriter(model, custom_instructions=custom_instructions)
     async with rewriter.run_stream(build_rewriter_prompt(seed_prompt, answers)) as result:
-        async for text in result.stream_text():
-            yield text
+        async for fragment in result.stream_text(delta=True):
+            yield fragment

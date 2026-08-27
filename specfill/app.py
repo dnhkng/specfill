@@ -2,7 +2,6 @@
 
 import sys
 from pathlib import Path
-from time import monotonic
 
 from rich.text import Text
 from textual import on, work
@@ -539,22 +538,29 @@ class ResultScreen(Screen):
         status = self.query_one("#status", Static)
         md = self.query_one("#result", Markdown)
         status.update("Generating refined prompt…")
-        last = 0.0
+        # Stream through Textual's MarkdownStream: it appends fragments
+        # incrementally and coalesces them when rendering falls behind. Calling
+        # Markdown.update() per chunk instead re-parses and re-mounts the whole
+        # document each time, and the un-awaited updates pile up into a backlog
+        # that pins the CPU long after the stream itself has finished.
+        await md.update("")
+        stream = Markdown.get_stream(md)
+        text = ""
         try:
-            async for text in stream_rewrite(
+            async for fragment in stream_rewrite(
                 app.model_instance, self.seed, self.answers, self.custom_instructions
             ):
+                text += fragment
                 self.final_text = text
-                now = monotonic()
-                if now - last > 0.2:
-                    md.update(text)
-                    last = now
+                await stream.write(fragment)
         except Exception as exc:
-            md.update(self.final_text)
+            if not text:  # nothing new arrived: keep showing the previous result
+                await md.update(self.final_text)
             status.update(Text(f"Rewrite failed: {exc} — press r to regenerate."))
             self.notify("Rewrite failed.", severity="error")
             return
-        md.update(self.final_text)
+        finally:
+            await stream.stop()
         status.update(
             f"Done — {len(self.final_text):,} characters."
             "  c: copy · r: regenerate · p: quit & print to stdout"

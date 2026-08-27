@@ -79,8 +79,8 @@ async def test_full_flow(monkeypatch):
     async def fake_stream(model, seed, answers, custom_instructions=""):
         collected.extend(answers)
         stream_kwargs["custom_instructions"] = custom_instructions
-        for chunk in ["# Refined", FINAL]:
-            yield chunk
+        for fragment in ["# Refined prompt\n\n", "With answers woven in."]:
+            yield fragment
             await asyncio.sleep(0)
 
     monkeypatch.setattr(app_mod, "stream_rewrite", fake_stream)
