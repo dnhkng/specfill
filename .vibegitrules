@@ -1,0 +1,5 @@
+Use all-lowercase short commit messages with a app/package prefix, e.g. "frontend: add feature for better vibin'" or "db: update user table with email field".
+
+Make the commits relatively small and decompose them on semantic and logical level. Keep the commit message short and simple. Don't use commit descriptions.
+
+Formatting related changes should be grouped into one commit.
