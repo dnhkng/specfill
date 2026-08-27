@@ -115,6 +115,14 @@ async def test_full_flow(monkeypatch):
 
         await _wait_for(pilot, lambda: isinstance(app.screen, ResultScreen))
         await _wait_for(pilot, lambda: app.screen.final_text == FINAL)
+        await _wait_for(pilot, lambda: app.screen.query_one("#result").source == FINAL)
+
+        # The interview screen underneath must not keep its spinner animating:
+        # Textual still renders the screen below the current one, so a live
+        # spinner there forces a full repaint of the result screen at 16 Hz.
+        interview = next(s for s in app.screen_stack if isinstance(s, InterviewScreen))
+        assert not interview.has_class("loading")
+        assert interview.query_one("#loader").auto_refresh is None
 
         await pilot.press("p")  # quit & print
     assert app.return_value == FINAL

@@ -381,7 +381,7 @@ class InterviewScreen(Screen):
                 self.pending = questions
                 self.index = 0
                 self.round_answers = []
-                self.remove_class("loading")
+                self._stop_loading()
                 self.query_one("#activity", Static).update("")
                 await self._show_card()
                 return
@@ -414,6 +414,10 @@ class InterviewScreen(Screen):
 
     def _to_result(self, answers: list[Answer]) -> None:
         self.workers.cancel_group(self, "llm")
+        # Textual keeps rendering the screen directly beneath the current one,
+        # so a spinner left animating here would force a full repaint of the
+        # ResultScreen 16 times a second for as long as the app runs.
+        self._stop_loading()
         self.app.push_screen(
             ResultScreen(self.seed, answers, custom_instructions=self.custom_instructions)
         )
@@ -423,11 +427,18 @@ class InterviewScreen(Screen):
     def _set_loading(self, message: str) -> None:
         self.remove_class("errored")
         self.add_class("loading")
+        self.query_one("#loader", LoadingIndicator).auto_refresh = 1 / 16
         self.query_one("#status", Static).update(message)
         self.query_one("#activity", Static).update("")
 
-    def _show_error(self, exc: Exception) -> None:
+    def _stop_loading(self) -> None:
         self.remove_class("loading")
+        # The indicator's auto-refresh timer keeps ticking while it is hidden;
+        # pause it until the next round needs it.
+        self.query_one("#loader", LoadingIndicator).auto_refresh = None
+
+    def _show_error(self, exc: Exception) -> None:
+        self._stop_loading()
         self.add_class("errored")
         self.query_one("#status", Static).update("Error")
         self.query_one("#error_box", Static).update(
