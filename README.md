@@ -39,7 +39,8 @@ uv tool install specfill        # from a checkout: uv tool install .
 
 On first launch, a configuration wizard collects your provider preset
 (**OpenAI API**, **OpenAI subscription**, **OpenAI-compatible**, **Anthropic**,
-or **Google**), model identifier, API key, and an optional custom base URL. The
+or **Google**), model identifier, reasoning effort, API key, and an optional
+custom base URL. The
 OpenAI subscription option reuses a Codex login from `~/.codex/auth.json`; run
 `codex login` first. Other API keys are stored in the system keyring. If no
 keyring backend is available, they fall back to the config file (chmod 600).
@@ -77,11 +78,20 @@ paste screen), the CLI, or the file itself.
 ```sh
 specfill config show                    # current configuration
 specfill config path                    # config file location
-specfill config set provider anthropic  # provider | model | base-url | web-search
+specfill config set provider anthropic  # provider | model | reasoning-effort | base-url | web-search
 specfill config set provider openai-subscription
 specfill config set model claude-opus-5
+specfill config set reasoning-effort high   # default | none | minimal | low | medium | high | xhigh
 specfill config set-key                 # store the API key (hidden prompt)
 ```
+
+`reasoning-effort` controls how hard the model thinks before it answers.
+`default` leaves the provider's own behavior untouched. OpenAI-based providers
+receive the value verbatim as `reasoning_effort`; for Anthropic and Google it
+is translated to the closest supported thinking level (adaptive thinking plus
+output effort on Claude, the thinking level on Gemini). Levels a model does not
+support are reported by the provider as a request error, so pick another one
+if that happens.
 
 Every setting can also be overridden per invocation via `SPECFILL_*`
 environment variables, for example `SPECFILL_MODEL` or
