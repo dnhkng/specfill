@@ -20,6 +20,7 @@ from textual.widgets import (
     Markdown,
     RadioButton,
     RadioSet,
+    Select,
     SelectionList,
     Static,
     TextArea,
@@ -29,6 +30,8 @@ from textual.widgets.selection_list import Selection
 from .agents import InterviewSession, build_model, stream_rewrite
 from .config import (
     PROVIDERS,
+    REASONING_EFFORT_LABELS,
+    REASONING_EFFORTS,
     Settings,
     codex_auth_path,
     config_path,
@@ -139,6 +142,13 @@ class WizardScreen(Screen):
                 placeholder="model identifier",
                 id="model",
             )
+            yield Label("Reasoning effort")
+            yield Select(
+                [(REASONING_EFFORT_LABELS[effort], effort) for effort in REASONING_EFFORTS],
+                value=current.reasoning_effort if current else "default",
+                allow_blank=False,
+                id="reasoning_effort",
+            )
             yield Label(self._key_label(), id="api_key_label")
             yield Input(
                 password=True,
@@ -205,6 +215,7 @@ class WizardScreen(Screen):
 
     def action_save(self) -> None:
         model = self.query_one("#model", Input).value.strip()
+        reasoning_effort = self.query_one("#reasoning_effort", Select).value
         key = self.query_one("#api_key", Input).value.strip()
         base_url = self.query_one("#base_url", Input).value.strip()
         preset = PROVIDERS[self._provider]
@@ -217,7 +228,12 @@ class WizardScreen(Screen):
             return
 
         settings = self._candidate_settings().model_copy(
-            update={"provider": self._provider, "model": model, "base_url": base_url}
+            update={
+                "provider": self._provider,
+                "model": model,
+                "reasoning_effort": reasoning_effort,
+                "base_url": base_url,
+            }
         )
         if key and not preset.uses_codex_oauth:
             settings = store_api_key(settings, key)

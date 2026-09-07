@@ -6,6 +6,7 @@ import json
 from pydantic_ai import models
 from pydantic_ai.messages import ModelResponse, ToolCallPart
 from pydantic_ai.models.function import FunctionModel
+from textual.widgets import Select
 
 import specfill.app as app_mod
 from specfill.app import (
@@ -198,6 +199,7 @@ async def test_first_launch_wizard_saves_and_continues():
         assert isinstance(app.screen, WizardScreen)
 
         app.screen.query_one("#model").value = "gpt-5.6-sol"
+        app.screen.query_one("#reasoning_effort", Select).value = "high"
         app.screen.query_one("#api_key").value = "sk-wizard-test"
         await pilot.pause()
         await pilot.press("ctrl+s")
@@ -210,7 +212,37 @@ async def test_first_launch_wizard_saves_and_continues():
     saved = load_settings()
     assert saved is not None
     assert saved.model == "gpt-5.6-sol"
+    assert saved.reasoning_effort == "high"
     assert get_api_key(saved) == "sk-wizard-test"
+
+
+async def test_settings_screen_edits_reasoning_effort(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-env")
+
+    def model_fn(messages, info):
+        raise AssertionError("the model must not be called")
+
+    app = SpecfillApp(settings=TEST_SETTINGS, model=FunctionModel(model_fn))
+    async with app.run_test(size=(100, 45)) as pilot:
+        await pilot.pause()
+        await pilot.press("ctrl+o")
+        await pilot.pause()
+        assert isinstance(app.screen, WizardScreen)
+
+        select = app.screen.query_one("#reasoning_effort", Select)
+        assert select.value == "default"
+        select.value = "xhigh"
+        await pilot.pause()
+        await pilot.press("ctrl+s")
+        await _wait_for(pilot, lambda: isinstance(app.screen, PasteScreen))
+
+        assert app.settings.reasoning_effort == "xhigh"
+        # The model is rebuilt from the new settings, so the effort reaches it.
+        assert app.model_instance.settings == {"openai_reasoning_effort": "xhigh"}
+
+    saved = load_settings()
+    assert saved is not None
+    assert saved.reasoning_effort == "xhigh"
 
 
 async def test_first_launch_wizard_accepts_codex_oauth_without_api_key():

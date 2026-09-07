@@ -59,7 +59,8 @@ PasteScreen #custom_instructions {
     height: auto;
 }
 
-#wizard_form Input {
+#wizard_form Input,
+#wizard_form Select {
     max-width: 80;
 }
 
