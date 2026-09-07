@@ -661,7 +661,9 @@ def _build_parser() -> "argparse.ArgumentParser":
     config_sub.add_parser("show", help="print the current configuration")
     config_sub.add_parser("path", help="print the config file location")
     set_p = config_sub.add_parser("set", help="set a configuration value")
-    set_p.add_argument("key", choices=["provider", "model", "base-url", "web-search"])
+    set_p.add_argument(
+        "key", choices=["provider", "model", "reasoning-effort", "base-url", "web-search"]
+    )
     set_p.add_argument("value")
     config_sub.add_parser("set-key", help="store the API key (prompted, hidden input)")
     return parser
@@ -669,15 +671,21 @@ def _build_parser() -> "argparse.ArgumentParser":
 
 def _config_show(settings: Settings) -> int:
     stored = "yes" if get_api_key(settings) else "no"
-    print(f"config file:  {config_path()}")
-    print(f"provider:     {settings.provider}")
-    print(f"model:        {settings.model}")
-    print(f"base-url:     {settings.base_url or '(none)'}")
-    print(f"web-search:   {str(settings.web_search).lower()}")
+    rows = [
+        ("config file", str(config_path())),
+        ("provider", settings.provider),
+        ("model", settings.model),
+        ("reasoning-effort", settings.reasoning_effort),
+        ("base-url", settings.base_url or "(none)"),
+        ("web-search", str(settings.web_search).lower()),
+    ]
     if settings.preset.uses_codex_oauth:
-        print(f"codex oauth:  {stored} ({codex_auth_path()})")
+        rows.append(("codex oauth", f"{stored} ({codex_auth_path()})"))
     else:
-        print(f"api key:      {stored} (storage: {settings.api_key_storage})")
+        rows.append(("api key", f"{stored} (storage: {settings.api_key_storage})"))
+    width = max(len(key) for key, _ in rows) + 3
+    for key, value in rows:
+        print(f"{key + ':':<{width}}{value}")
     return 0
 
 
@@ -697,6 +705,15 @@ def _config_set(settings: Settings, key: str, value: str) -> int:
         settings = settings.model_copy(update=update)
     elif key == "model":
         settings = settings.model_copy(update={"model": value})
+    elif key == "reasoning-effort":
+        if value not in REASONING_EFFORTS:
+            print(
+                f"specfill: unknown reasoning effort {value!r} "
+                f"(choose from: {', '.join(REASONING_EFFORTS)})",
+                file=sys.stderr,
+            )
+            return 1
+        settings = settings.model_copy(update={"reasoning_effort": value})
     elif key == "base-url":
         settings = settings.model_copy(update={"base_url": value})
     elif key == "web-search":
