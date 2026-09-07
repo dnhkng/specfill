@@ -2,11 +2,17 @@
 
 import json
 
+import pytest
 from pydantic_ai import models
 from pydantic_ai.messages import ModelResponse, ToolCallPart
 from pydantic_ai.models.function import FunctionModel
 
-from specfill.agents import MAX_ROUNDS, InterviewSession, build_model
+from specfill.agents import (
+    MAX_ROUNDS,
+    InterviewSession,
+    build_model,
+    reasoning_model_settings,
+)
 from specfill.config import codex_auth_path, default_settings
 from specfill.models import (
     Answer,
@@ -21,7 +27,7 @@ from specfill.models import (
 models.ALLOW_MODEL_REQUESTS = False
 
 
-def test_build_subscription_model_uses_codex_endpoint_and_account_header():
+def _write_codex_auth() -> None:
     path = codex_auth_path()
     path.parent.mkdir(parents=True)
     path.write_text(
@@ -35,6 +41,9 @@ def test_build_subscription_model_uses_codex_endpoint_and_account_header():
         )
     )
 
+
+def test_build_subscription_model_uses_codex_endpoint_and_account_header():
+    _write_codex_auth()
     model = build_model(default_settings("openai-subscription"), "oauth-test")
     client = model.provider.client
     assert str(client.base_url) == "https://chatgpt.com/backend-api/codex/"
@@ -42,6 +51,49 @@ def test_build_subscription_model_uses_codex_endpoint_and_account_header():
     assert client.default_headers["ChatGPT-Account-Id"] == "account-test"
     assert client.default_headers["originator"] == "specfill"
     assert model.settings == {"openai_store": False}
+
+
+def test_build_subscription_model_merges_reasoning_effort_with_codex_defaults():
+    _write_codex_auth()
+    settings = default_settings("openai-subscription").model_copy(
+        update={"reasoning_effort": "high"}
+    )
+    model = build_model(settings, "oauth-test")
+    assert model.settings == {"openai_store": False, "openai_reasoning_effort": "high"}
+
+
+@pytest.mark.parametrize(
+    ("provider", "effort", "expected"),
+    [
+        ("openai", "default", None),
+        ("openai", "high", {"openai_reasoning_effort": "high"}),
+        ("openai", "none", {"openai_reasoning_effort": "none"}),
+        ("openai-subscription", "xhigh", {"openai_reasoning_effort": "xhigh"}),
+        ("openai-compatible", "low", {"openai_reasoning_effort": "low"}),
+        ("anthropic", "default", None),
+        ("anthropic", "medium", {"thinking": "medium"}),
+        ("anthropic", "none", {"thinking": False}),
+        ("google", "minimal", {"thinking": "minimal"}),
+        ("google", "none", {"thinking": False}),
+    ],
+)
+def test_reasoning_model_settings(provider, effort, expected):
+    settings = default_settings(provider).model_copy(update={"reasoning_effort": effort})
+    assert reasoning_model_settings(settings) == expected
+
+
+@pytest.mark.parametrize("provider", ["openai", "openai-compatible", "anthropic", "google"])
+def test_build_model_carries_reasoning_effort(provider):
+    settings = default_settings(provider).model_copy(
+        update={"model": "some-model", "reasoning_effort": "high"}
+    )
+    model = build_model(settings, "key-test")
+    assert model.settings == reasoning_model_settings(settings)
+    assert model.settings is not None
+
+
+def test_build_model_leaves_provider_default_reasoning_alone():
+    assert build_model(default_settings("openai"), "key-test").settings is None
 
 
 def make_question(header: str = "Auth", kind: str = "single") -> Question:

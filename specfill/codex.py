@@ -29,7 +29,9 @@ class CodexResponsesModel(OpenAIResponsesModel):
             return response.get()
 
 
-def build_codex_model(settings: Settings) -> CodexResponsesModel:
+def build_codex_model(
+    settings: Settings, model_settings: ModelSettings | None = None
+) -> CodexResponsesModel:
     auth = get_codex_auth()
     if auth is None:
         raise ValueError("Codex OAuth credentials not found; run `codex login`")
@@ -45,5 +47,5 @@ def build_codex_model(settings: Settings) -> CodexResponsesModel:
     return CodexResponsesModel(
         settings.model,
         provider=OpenAIProvider(openai_client=client),
-        settings={"openai_store": False},
+        settings={"openai_store": False, **(model_settings or {})},
     )

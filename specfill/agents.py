@@ -1,7 +1,7 @@
 """Interviewer and rewriter agents plus the session orchestrating the interview.
 
-Agents are built at runtime from user settings (provider, model, key). The
-interviewer gets the model's native web search when enabled; on models without
+Agents are built at runtime from user settings (provider, model, key, reasoning
+effort). The interviewer gets the model's native web search when enabled; on models without
 native search the tool is dropped (optional=True), and on runtime search
 failures the session warns and continues without it.
 """
@@ -14,6 +14,7 @@ from pydantic_ai.capabilities import WebSearch
 from pydantic_ai.exceptions import ModelAPIError, ModelHTTPError
 from pydantic_ai.messages import NativeToolCallPart, PartEndEvent, PartStartEvent
 from pydantic_ai.models import Model
+from pydantic_ai.settings import ModelSettings
 
 from .config import Settings
 from .models import (
@@ -95,20 +96,40 @@ def _with_custom_instructions(base: str, custom: str) -> str:
     )
 
 
+def reasoning_model_settings(settings: Settings) -> ModelSettings | None:
+    """Translate the reasoning-effort setting into Pydantic AI model settings.
+
+    The setting uses OpenAI's reasoning_effort vocabulary, so OpenAI-family
+    providers get it verbatim: the choice then reaches the API even for models
+    Pydantic AI has no profile for. Anthropic and Google get the unified
+    ``thinking`` level, which Pydantic AI maps onto adaptive thinking plus
+    output effort on Claude and onto the thinking level on Gemini.
+    """
+    effort = settings.reasoning_effort
+    if effort == "default":
+        return None
+    if settings.provider in ("openai", "openai-subscription", "openai-compatible"):
+        return {"openai_reasoning_effort": effort}
+    return {"thinking": False if effort == "none" else effort}
+
+
 def build_model(settings: Settings, api_key: str) -> Model:
     """Construct the Pydantic AI model instance for the configured provider."""
     base_url = settings.base_url.strip() or None
+    model_settings = reasoning_model_settings(settings)
     if settings.provider == "openai":
         from pydantic_ai.models.openai import OpenAIResponsesModel
         from pydantic_ai.providers.openai import OpenAIProvider
 
         return OpenAIResponsesModel(
-            settings.model, provider=OpenAIProvider(api_key=api_key, base_url=base_url)
+            settings.model,
+            provider=OpenAIProvider(api_key=api_key, base_url=base_url),
+            settings=model_settings,
         )
     if settings.provider == "openai-subscription":
         from .codex import build_codex_model
 
-        return build_codex_model(settings)
+        return build_codex_model(settings, model_settings)
     if settings.provider == "openai-compatible":
         from pydantic_ai.models.openai import OpenAIChatModel
         from pydantic_ai.providers.openai import OpenAIProvider
@@ -116,6 +137,7 @@ def build_model(settings: Settings, api_key: str) -> Model:
         return OpenAIChatModel(
             settings.model,
             provider=OpenAIProvider(api_key=api_key or "unused", base_url=base_url),
+            settings=model_settings,
         )
     if settings.provider == "anthropic":
         from pydantic_ai.models.anthropic import AnthropicModel
@@ -124,7 +146,9 @@ def build_model(settings: Settings, api_key: str) -> Model:
         kwargs = {"api_key": api_key}
         if base_url:
             kwargs["base_url"] = base_url
-        return AnthropicModel(settings.model, provider=AnthropicProvider(**kwargs))
+        return AnthropicModel(
+            settings.model, provider=AnthropicProvider(**kwargs), settings=model_settings
+        )
     if settings.provider == "google":
         from pydantic_ai.models.google import GoogleModel
         from pydantic_ai.providers.google import GoogleProvider
@@ -132,7 +156,9 @@ def build_model(settings: Settings, api_key: str) -> Model:
         kwargs = {"api_key": api_key}
         if base_url:
             kwargs["base_url"] = base_url
-        return GoogleModel(settings.model, provider=GoogleProvider(**kwargs))
+        return GoogleModel(
+            settings.model, provider=GoogleProvider(**kwargs), settings=model_settings
+        )
     raise ValueError(f"Unknown provider: {settings.provider}")
 
 
