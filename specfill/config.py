@@ -31,6 +31,31 @@ ProviderName = Literal[
     "google",
 ]
 
+# "default" leaves the provider's own behavior untouched; the rest mirror OpenAI's
+# reasoning_effort vocabulary and are mapped onto the closest thinking level for
+# other providers (see agents.reasoning_model_settings).
+ReasoningEffort = Literal["default", "none", "minimal", "low", "medium", "high", "xhigh"]
+
+REASONING_EFFORTS: tuple[ReasoningEffort, ...] = (
+    "default",
+    "none",
+    "minimal",
+    "low",
+    "medium",
+    "high",
+    "xhigh",
+)
+
+REASONING_EFFORT_LABELS: dict[ReasoningEffort, str] = {
+    "default": "Provider default",
+    "none": "None (disable reasoning)",
+    "minimal": "Minimal",
+    "low": "Low",
+    "medium": "Medium",
+    "high": "High",
+    "xhigh": "Extra high",
+}
+
 
 @dataclass(frozen=True)
 class ProviderPreset:
@@ -112,6 +137,7 @@ class Settings(BaseSettings):
 
     provider: ProviderName = "openai"
     model: str = "gpt-5.6-sol"
+    reasoning_effort: ReasoningEffort = "default"
     base_url: str = ""
     web_search: bool = True
     api_key_storage: Literal["keyring", "config"] = "keyring"
@@ -144,6 +170,7 @@ def default_settings(provider: ProviderName = "openai") -> Settings:
     return Settings.model_construct(
         provider=provider,
         model=PROVIDERS[provider].default_model,
+        reasoning_effort="default",
         base_url="",
         web_search=True,
         api_key_storage="keyring",

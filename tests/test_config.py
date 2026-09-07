@@ -26,7 +26,7 @@ def test_first_launch_returns_none():
 
 def test_save_load_round_trip():
     settings = default_settings("anthropic").model_copy(
-        update={"model": "claude-opus-5", "web_search": False}
+        update={"model": "claude-opus-5", "reasoning_effort": "high", "web_search": False}
     )
     path = save_settings(settings)
     assert path == config_path()
@@ -36,6 +36,7 @@ def test_save_load_round_trip():
     assert loaded is not None
     assert loaded.provider == "anthropic"
     assert loaded.model == "claude-opus-5"
+    assert loaded.reasoning_effort == "high"
     assert loaded.web_search is False
     assert loaded.api_key_storage == "keyring"
 
@@ -50,9 +51,28 @@ def test_corrupt_config_returns_none():
 def test_env_overrides_config_file(monkeypatch):
     save_settings(default_settings("openai"))
     monkeypatch.setenv("SPECFILL_MODEL", "gpt-6")
+    monkeypatch.setenv("SPECFILL_REASONING_EFFORT", "low")
     loaded = load_settings()
     assert loaded.model == "gpt-6"
+    assert loaded.reasoning_effort == "low"
     assert loaded.provider == "openai"
+
+
+def test_reasoning_effort_defaults_when_missing_from_config():
+    """Config files written before the setting existed keep working."""
+    path = config_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("provider = 'openai'\nmodel = 'gpt-5.6-sol'\n")
+    loaded = load_settings()
+    assert loaded is not None
+    assert loaded.reasoning_effort == "default"
+
+
+def test_unknown_reasoning_effort_is_rejected():
+    path = config_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("provider = 'openai'\nreasoning_effort = 'ultra'\n")
+    assert load_settings() is None
 
 
 def test_store_api_key_prefers_keyring(isolated_config):

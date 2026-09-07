@@ -9,6 +9,7 @@ def isolated_config(tmp_path, monkeypatch):
     for var in (
         "SPECFILL_PROVIDER",
         "SPECFILL_MODEL",
+        "SPECFILL_REASONING_EFFORT",
         "SPECFILL_BASE_URL",
         "SPECFILL_WEB_SEARCH",
         "SPECFILL_API_KEY_STORAGE",
